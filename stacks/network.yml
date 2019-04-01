@@ -1,0 +1,159 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: ---
+Resources: 
+    PlatoVPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock: 10.17.0.0/16
+            EnableDnsSupport: 'false'
+            EnableDnsHostnames: 'false'
+            Tags:
+              - Key: Name
+                Value: PlatoVPC
+    PlatoInternetGw:
+        Type: AWS::EC2::InternetGateway
+        Properties: 
+            Tags:
+              - Key: Name
+                Value: PlatoVPC
+    PlatoVPCGatewayAttachment:
+         Type: AWS::EC2::VPCGatewayAttachment
+         Properties:
+            VpcId:
+              Ref: PlatoVPC
+            InternetGatewayId:
+              Ref: PlatoInternetGw
+    PlatoPrivateSubNetA:
+        Type: AWS::EC2::Subnet
+        Properties:
+          AvailabilityZone: 
+           Fn::Select: 
+            - 0
+            - Fn::GetAZs: ""
+          CidrBlock: 10.17.1.0/24
+          VpcId: 
+             Ref: PlatoVPC
+          Tags:
+            - Key: Name
+              Value: PlatoExternalSubNetA
+    PlatoPublicSubNetA:
+        Type: AWS::EC2::Subnet
+        Properties:
+          AvailabilityZone:
+           Fn::Select: 
+            - 0
+            - Fn::GetAZs: ""
+          CidrBlock: 10.17.11.0/24
+          MapPublicIpOnLaunch: true
+          VpcId: 
+             Ref: PlatoVPC
+          Tags:
+            - Key: Name
+              Value: PlatoExternalSubNetA
+    PlatoPrivateSubNetB:
+        Type: AWS::EC2::Subnet
+        Properties:
+          AvailabilityZone:
+           Fn::Select: 
+            - 1
+            - Fn::GetAZs: ""
+          CidrBlock: 10.17.2.0/24
+          VpcId: 
+             Ref: PlatoVPC
+          Tags:
+            - Key: Name
+              Value: PlatoExternalSubNetB
+    PlatoPublicSubNetB:
+        Type: AWS::EC2::Subnet
+        Properties:
+          AvailabilityZone: 
+           Fn::Select: 
+            - 1
+            - Fn::GetAZs: ""
+          CidrBlock: 10.17.12.0/24
+          MapPublicIpOnLaunch: true
+          VpcId: 
+             Ref: PlatoVPC
+          Tags:
+            - Key: Name
+              Value: PlatoExternalSubNetB
+    PlatoRouteTablePrivateA:
+        Type: AWS::EC2::RouteTable
+        Properties: 
+          VpcId:
+            Ref: PlatoVPC
+          Tags:
+            - Key: Name
+              Value: PlatoRouteTablePrivateA
+    PlatoRouteTablePublicA:
+        Type: AWS::EC2::RouteTable
+        Properties: 
+          VpcId:
+            Ref: PlatoVPC
+          Tags:
+            - Key: Name
+              Value: PlatoRouteTablePublicA
+    PlatoRouteTablePrivateB:
+        Type: AWS::EC2::RouteTable
+        Properties: 
+          VpcId:
+            Ref: PlatoVPC
+          Tags:
+            - Key: Name
+              Value: PlatoRouteTablePrivateB
+    PlatoRouteTablePublicB:
+        Type: AWS::EC2::RouteTable
+        Properties: 
+          VpcId:
+            Ref: PlatoVPC
+          Tags:
+            - Key: Name
+              Value: PlatoRouteTablePublicB
+    PlatoRouteTableAssocciationPrivateA:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+          SubnetId:
+            Ref: PlatoPrivateSubNetA
+          RouteTableId:
+            Ref: PlatoRouteTablePrivateA
+    PlatoRouteTableAssocciationPublicA:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+          SubnetId:
+            Ref: PlatoPublicSubNetA
+          RouteTableId:
+            Ref: PlatoRouteTablePublicA
+    PlatoRouteTableAssocciationPrivateB:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+          SubnetId:
+            Ref: PlatoPrivateSubNetB
+          RouteTableId:
+            Ref: PlatoRouteTablePrivateB
+    PlatoRouteTableAssocciationPublicB:
+        Type: AWS::EC2::SubnetRouteTableAssociation
+        Properties:
+          SubnetId:
+            Ref: PlatoPublicSubNetB
+          RouteTableId:
+            Ref: PlatoRouteTablePublicB
+    PlatoRouteTablePublicInternetRouteA:
+        Type: 'AWS::EC2::Route'
+        DependsOn: PlatoVPCGatewayAttachment
+        Properties:
+          RouteTableId: 
+              Ref: PlatoRouteTablePublicA
+          DestinationCidrBlock: '0.0.0.0/0'
+          GatewayId: 
+              Ref: PlatoInternetGw     
+    PlatoRouteTablePublicInternetRouteB:
+        Type: 'AWS::EC2::Route'
+        DependsOn: PlatoVPCGatewayAttachment
+        Properties:
+          RouteTableId: 
+              Ref: PlatoRouteTablePublicB
+          DestinationCidrBlock: '0.0.0.0/0'
+          GatewayId: 
+              Ref: PlatoInternetGw             
+    
+
