@@ -1,13 +1,54 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: ---
-Metadata: 
-
-Parameters: 
-
-Mappings: 
-
-Conditions: 
-
 Resources: 
+    PlatoVPC:
+        Type: AWS::EC2::VPC
+        Properties:
+            CidrBlock: 10.17.0.0/16
+            EnableDnsSupport: 'false'
+            EnableDnsHostnames: 'false'
+            Tags:
+              - Key: Name
+                Value: PlatoVPC
+              - Key: Project
+                Value: Plato
+    PlatoInternetGw:
+        Type: AWS::EC2::InternetGateway
+        Properties: 
+            Tags:
+              - Key: Name
+                Value: PlatoVPC
+              - Key: Project
+                Value: Plato
+    PlatoAttachGateway:
+         Type: AWS::EC2::VPCGatewayAttachment
+         Properties:
+            VpcId:
+              Ref: PlatoVPC
+            InternetGatewayId:
+              Ref: PlatoInternetGw
+    PlatoSubNetA:
+        Type: AWS::EC2::Subnet
+        Properties:
+          AvailabilityZone: 'ap-southeast-2a'
+          CidrBlock: 10.17.1.0/24
+          VpcId: 
+             Ref: PlatoVPC
+          Tags:
+            - Key: Name
+              Value: PlatoExternalSubNetA
+            - Key: Project
+              Value: Plato
+    PlatoSubNetB:
+        Type: AWS::EC2::Subnet
+        Properties:
+          AvailabilityZone: 'ap-southeast-2b'
+          CidrBlock: 10.17.2.0/24
+          VpcId: 
+             Ref: PlatoVPC
+          Tags:
+            - Key: Name
+              Value: PlatoExternalSubNetB
+            - Key: Project
+              Value: Plato
 
-Outputs:
