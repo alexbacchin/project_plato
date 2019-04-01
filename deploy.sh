@@ -1,0 +1,1 @@
+aws cloudformation deploy --template-file lamp_stack.cform --stack-name plato-stack 
