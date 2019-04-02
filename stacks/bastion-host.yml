@@ -5,7 +5,7 @@ Parameters:
     Description: 'Stack name of network VPC stack'
     Type: String
   SSHKeyName:
-    Description: 'Optional key pair of the ec2-user to establish a SSH connection to the SSH bastion host/instance.'
+    Description: 'key to access the instance.'
     Type: String
     Default: ''
 Mappings:
@@ -64,7 +64,7 @@ Resources:
     Type: 'AWS::Logs::LogGroup'
     Properties:
       RetentionInDays: 30
-  PlatoIAMRole:
+  PlatoIAMRoleSSH:
     Type: 'AWS::IAM::Role'
     Properties:
       AssumeRolePolicyDocument:
@@ -101,7 +101,7 @@ Resources:
     Type: 'AWS::IAM::InstanceProfile'
     Properties:
       Roles:
-      - !Ref PlatoIAMRole
+      - !Ref PlatoIAMRoleSSH
   PlatoSSHBastionLaunchConfiguration:
     Type: 'AWS::AutoScaling::LaunchConfiguration'
     Metadata:
@@ -277,19 +277,6 @@ Resources:
           /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource PlatoSSHBastionAutoScalingGroup --region ${AWS::Region}
   PlatoSSHBastionAutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
-    Properties:
-      LaunchConfigurationName: !Ref PlatoSSHBastionLaunchConfiguration
-      MaxSize: '1'
-      MinSize: '1'
-      VPCZoneIdentifier: 
-          Fn::Split: 
-            - ',' 
-            - 'Fn::ImportValue': !Sub '${NetworkVPCStack}-SubnetsPublic'
-      Tags:
-       - Key: Name
-         Value: !Sub
-         - 'SSH bastion host/instance ${CidrBlock}'
-         - CidrBlock: {'Fn::ImportValue': !Sub '${NetworkVPCStack}-CidrBlock'}
     CreationPolicy:
       ResourceSignal:
         Count: 1
@@ -304,3 +291,31 @@ Resources:
         - AlarmNotification
         - ScheduledActions
         WaitOnResourceSignals: true
+    Properties:
+      LaunchConfigurationName: !Ref PlatoSSHBastionLaunchConfiguration
+      MaxSize: '1'
+      MinSize: '1'
+      VPCZoneIdentifier: 
+          Fn::Split: 
+            - ',' 
+            - 'Fn::ImportValue': !Sub '${NetworkVPCStack}-SubnetsPublic'
+      Tags:
+       - PropagateAtLaunch: true
+         Key: Name
+         Value: !Sub
+         - 'SSH bastion host/instance ${CidrBlock}'
+         - CidrBlock: {'Fn::ImportValue': !Sub '${NetworkVPCStack}-VpcCidrBlock'}
+Outputs:
+  StackName:
+    Description: 'Stack name.'
+    Value: !Sub '${AWS::StackName}'
+  SecurityGroup:
+    Description: 'Bastion host security group'
+    Value: !Ref PlatoSSHSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityGroup'
+  IPAddress:
+    Description: 'Bastion host IP address'
+    Value: !Ref PlatoEIP
+    Export:
+      Name: !Sub '${AWS::StackName}-IPAddress'

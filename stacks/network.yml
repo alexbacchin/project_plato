@@ -316,8 +316,28 @@ Outputs:
           - !Ref PlatoPrivateSubNetB
     Export:
       Name: !Sub '${AWS::StackName}-SubnetsPrivate'
-  CidrBlock:
+  VpcCidrBlock:
     Description: 'IP addresses for the VPC.'
     Value: !GetAtt 'PlatoVPC.CidrBlock'
     Export:
-      Name: !Sub '${AWS::StackName}-CidrBlock'
+      Name: !Sub '${AWS::StackName}-VpcCidrBlock'
+  SubnetPrivateA:
+    Description: 'Subnet public A'
+    Value: !Ref PlatoPrivateSubNetA
+    Export:
+      Name: !Sub '${AWS::StackName}-SubnetPrivateA'
+  SubnetPrivateB:
+    Description: 'Subnet public B'
+    Value: !Ref PlatoPrivateSubNetB
+    Export:
+      Name: !Sub '${AWS::StackName}-SubnetPrivateB'
+  SubnetPublicA:
+    Description: 'Subnet public A'
+    Value: !Ref PlatoPublicSubNetA
+    Export:
+      Name: !Sub '${AWS::StackName}-SubnetPublicA'
+  SubnetPublicB:
+    Description: 'Subnet public B'
+    Value: !Ref PlatoPublicSubNetB
+    Export:
+      Name: !Sub '${AWS::StackName}-SubnetPublicB'

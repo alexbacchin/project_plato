@@ -1,0 +1,442 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: ---
+Parameters:
+  NetworkVPCStack:
+    Description: 'Stack name of network'
+    Type: String
+  BastionHostStack:
+    Description: 'Stack name of bastion hosts'
+    Type: String
+  DatabasePassword: 
+    Description: 'datatabase password'
+    Type: string
+  SSHKeyName:
+    Description: 'key pair for web servers'
+    Type: string
+Mappings:
+  RegionMap:
+    'ap-south-1':
+      AMI: 'ami-0937dcc711d38ef3f'
+    'eu-west-3':
+      AMI: 'ami-0854d53ce963f69d8'
+    'eu-north-1':
+      AMI: 'ami-6d27a913'
+    'eu-west-2':
+      AMI: 'ami-0664a710233d7c148'
+    'eu-west-1':
+      AMI: 'ami-0fad7378adf284ce0'
+    'ap-northeast-2':
+      AMI: 'ami-018a9a930060d38aa'
+    'ap-northeast-1':
+      AMI: 'ami-0d7ed3ddb85b521a6'
+    'sa-east-1':
+      AMI: 'ami-0b04450959586da29'
+    'ca-central-1':
+      AMI: 'ami-0de8b8e4bc1f125fe'
+    'ap-southeast-1':
+      AMI: 'ami-04677bdaa3c2b6e24'
+    'ap-southeast-2':
+      AMI: 'ami-0c9d48b5db609ad6e'
+    'eu-central-1':
+      AMI: 'ami-0eaec5838478eb0ba'
+    'us-east-1':
+      AMI: 'ami-035be7bafff33b6b6'
+    'us-east-2':
+      AMI: 'ami-04328208f4f0cf1fe'
+    'us-west-1':
+      AMI: 'ami-0799ad445b5727125'
+    'us-west-2':
+      AMI: 'ami-032509850cf9ee54e'
+Resources:
+
+  PlatoLoadBalancerSecurityGroup:
+      Type: 'AWS::EC2::SecurityGroup'
+      Properties:
+        GroupDescription: 'application load balancer security group'
+        VpcId: {'Fn::ImportValue': !Sub '${NetworkVPCStack}-VPC'}
+        SecurityGroupIngress:
+          - FromPort: 80
+            IpProtocol: tcp
+            CidrIp: '0.0.0.0/0'
+            ToPort: 80
+  PlatoLoadBalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      LoadBalancerAttributes:
+      - Key: 'idle_timeout.timeout_seconds'
+        Value: !Ref LoadBalancerIdleTimeout
+      - Key: 'routing.http2.enabled'
+        Value: 'true'
+      Subnets:
+      - {'Fn::ImportValue': !Sub '${NetworkVPCStack}-SubnetPublicA'}
+      - {'Fn::ImportValue': !Sub '${NetworkVPCStack}-SubnetPublicA'}
+      SecurityGroups:
+      - !Ref PlatoLoadBalancerSecurityGroup
+      Scheme: 'internet-facing'
+  PlatoLoadBalancerListener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref PlatoLoadBalancerTargetGroup
+      LoadBalancerArn: !Ref PlatoLoadBalancer
+      Port: 80
+      Protocol: HTTP
+  PlatoLoadBalancerTargetGroup: 
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckIntervalSeconds: 15
+      HealthCheckPath: '/'
+      HealthCheckPort: '80'
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+      Matcher:
+        HttpCode: '200-299'
+      Port: 80
+      Protocol: HTTP
+      VpcId: {'Fn::ImportValue': !Sub '${NetworkVPCStack}-VPC'}
+      TargetGroupAttributes:
+      - Key: 'deregistration_delay.timeout_seconds'
+        Value: '30'
+  PlatoDatabaseSecurityGroup:
+      Type: 'AWS::EC2::SecurityGroup'
+      Properties:
+      GroupDescription: 'rds-lampstack'
+      VpcId: {'Fn::ImportValue': !Sub '${NetworkVPCStack}-VPC'}
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+        SourceSecurityGroupId: !Ref PlatoWebServerSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+        SourceSecurityGroupId: {'Fn::ImportValue': !Sub '${BastionHostStack}-SecurityGroup'}
+  PlatoDatabaseSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: 'RDS subnet group'
+      SubnetIds:
+      - {'Fn::ImportValue': !Sub '${NetworkVPCStack}-SubnetPrivateA'}
+      - {'Fn::ImportValue': !Sub '${NetworkVPCStack}-SubnetPrivateB'}
+  PlatoDatabaseCluster:
+    Type: 'AWS::RDS::DBCluster'
+    Properties:
+      DatabaseName: lampstackdb
+      DBSubnetGroupName: !Ref PlatoDatabaseSubnetGroup
+      Engine: aurora
+      EngineMode: serverless
+      BackupRetentionPeriod: 30
+      MasterUsername: lampstackdb
+      MasterUserPassword: !Ref DatabasePassword
+      VpcSecurityGroupIds:
+      - !Ref PlatoDatabaseSecurityGroup
+  PlatoWebServerLogs:
+      Type: 'AWS::Logs::LogGroup'
+      Properties:
+        RetentionInDays: 30
+  PlatoWebServerSecurityGroup:
+      Type: 'AWS::EC2::SecurityGroup'
+      Properties:
+        GroupDescription: 'lampstack-ec2'
+        VpcId: {'Fn::ImportValue': !Sub '${NetworkVPCStack}-VPC'}
+        SecurityGroupIngress:
+        - FromPort: 80
+          IpProtocol: tcp
+          SourceSecurityGroupId: !Ref PlatoLoadBalancerSecurityGroup
+          ToPort: 80
+        - FromPort: 22
+          ToPort: 22
+          IpProtocol: tcp
+          SourceSecurityGroupId: {'Fn::ImportValue': !Sub '${BastionHostStack}-SecurityGroup'}
+  PlatoIAMRoleWebServer:
+      Type: 'AWS::IAM::Role'
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - 'ec2.amazonaws.com'
+            Action:
+            - 'sts:AssumeRole'
+        Path: '/'
+        Policies:
+        - PolicyName: 'ec2'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - 'ec2:AssociateAddress'
+              Resource:
+              - '*'
+        - PolicyName: logs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - 'logs:DescribeLogStreams'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              Resource: !GetAtt 'PlatoSSHLogs.Arn'
+  PlatoWebServerInstanceProfile:
+      Type: 'AWS::IAM::InstanceProfile'
+      Properties:
+        Path: '/'
+        Roles:
+        - !Ref PlatoIAMRoleWebServer
+  PlatoWebServerLauchConfiguration:
+      Type: 'AWS::AutoScaling::LaunchConfiguration'
+      Metadata:
+       'AWS::CloudFormation::Init':
+        configSets:
+          default: [awslogs, extras, config]
+        awslogs:
+          packages:
+            yum:
+              awslogs: []
+          files:
+            '/etc/awslogs/awscli.conf':
+              content: !Sub |
+                [default]
+                region = ${AWS::Region}
+                [plugins]
+                cwlogs = cwlogs
+              mode: '000644'
+              owner: root
+              group: root
+            '/etc/awslogs/awslogs.conf':
+              content: !Sub |
+                [general]
+                state_file = /var/lib/awslogs/agent-state
+                [/var/log/amazon/ssm/amazon-ssm-agent.log]
+                datetime_format = %Y-%m-%d %H:%M:%S
+                file = /var/log/amazon/ssm/amazon-ssm-agent.log
+                log_stream_name = {instance_id}/var/log/amazon/ssm/amazon-ssm-agent.log
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/amazon/ssm/errors.log]
+                datetime_format = %Y-%m-%d %H:%M:%S
+                file = /var/log/amazon/ssm/errors.log
+                log_stream_name = {instance_id}/var/log/amazon/ssm/errors.log
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/audit/audit.log]
+                file = /var/log/audit/audit.log
+                log_stream_name = {instance_id}/var/log/audit/audit.log
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/awslogs.log]
+                datetime_format = %Y-%m-%d %H:%M:%S
+                file = /var/log/awslogs.log
+                log_stream_name = {instance_id}/var/log/awslogs.log
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/boot.log]
+                file = /var/log/boot.log
+                log_stream_name = {instance_id}/var/log/boot.log
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/cfn-hup.log]
+                datetime_format = %Y-%m-%d %H:%M:%S
+                file = /var/log/cfn-hup.log
+                log_stream_name = {instance_id}/var/log/cfn-hup.log
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/cfn-init-cmd.log]
+                datetime_format = %Y-%m-%d %H:%M:%S
+                file = /var/log/cfn-init-cmd.log
+                log_stream_name = {instance_id}/var/log/cfn-init-cmd.log
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/cfn-init.log]
+                datetime_format = %Y-%m-%d %H:%M:%S
+                file = /var/log/cfn-init.log
+                log_stream_name = {instance_id}/var/log/cfn-init.log
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/cfn-wire.log]
+                datetime_format = %Y-%m-%d %H:%M:%S
+                file = /var/log/cfn-wire.log
+                log_stream_name = {instance_id}/var/log/cfn-wire.log
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/cloud-init-output.log]
+                file = /var/log/cloud-init-output.log
+                log_stream_name = {instance_id}/var/log/cloud-init-output.log
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/cloud-init.log]
+                datetime_format = %b %d %H:%M:%S
+                file = /var/log/cloud-init.log
+                log_stream_name = {instance_id}/var/log/cloud-init.log
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/cron]
+                datetime_format = %b %d %H:%M:%S
+                file = /var/log/cron
+                log_stream_name = {instance_id}/var/log/cron
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/dmesg]
+                file = /var/log/dmesg
+                log_stream_name = {instance_id}/var/log/dmesg
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/grubby_prune_debug]
+                file = /var/log/grubby_prune_debug
+                log_stream_name = {instance_id}/var/log/grubby_prune_debug
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/maillog]
+                datetime_format = %b %d %H:%M:%S
+                file = /var/log/maillog
+                log_stream_name = {instance_id}/var/log/maillog
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/messages]
+                datetime_format = %b %d %H:%M:%S
+                file = /var/log/messages
+                log_stream_name = {instance_id}/var/log/messages
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/secure]
+                datetime_format = %b %d %H:%M:%S
+                file = /var/log/secure
+                log_stream_name = {instance_id}/var/log/secure
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/yum.log]
+                datetime_format = %b %d %H:%M:%S
+                file = /var/log/yum.log
+                log_stream_name = {instance_id}/var/log/yum.log
+                log_group_name = ${PlatoWebServerLogs}
+              mode: '000644'
+              owner: root
+              group: root
+            '/etc/awslogs/config/efs.conf':
+              content: !Sub |
+                [/var/log/amazon/efs/mount.log]
+                datetime_format = %Y-%m-%d %H:%M:%S
+                file = /var/log/amazon/efs/mount.log
+                log_stream_name = {instance_id}/var/log/amazon/efs/mount.log
+                log_group_name = ${PlatoWebServerLogs}
+              mode: '000644'
+              owner: root
+              group: root
+            '/etc/awslogs/config/httpd.conf':
+              content: !Sub |
+                [/var/log/httpd/access_log]
+                datetime_format = %b %d %H:%M:%S %Y
+                file = /var/log/httpd/access_log
+                log_stream_name = {instance_id}/var/log/httpd/access_log
+                log_group_name = ${PlatoWebServerLogs}
+                [/var/log/httpd/error_log]
+                datetime_format = %d/%b/%Y:%H:%M:%S %z
+                file = /var/log/httpd/error_log
+                log_stream_name = {instance_id}/var/log/httpd/error_log
+                log_group_name = ${PlatoWebServerLogs}
+              mode: '000644'
+              owner: root
+              group: root
+          services:
+            sysvinit:
+              awslogsd:
+                enabled: true
+                ensureRunning: true
+                packages:
+                  yum:
+                  - awslogs
+                files:
+                - '/etc/awslogs/awslogs.conf'
+                - '/etc/awslogs/awscli.conf'
+                - '/etc/awslogs/config/efs.conf'
+                - '/etc/awslogs/config/httpd.conf'
+        config:
+          packages:
+            yum:
+              php: []
+              php-gd: []
+              php-opcache: []
+              php-mysqlnd: []
+              php-mbstring: []
+              php-xmlrpc: []
+              mariadb: []
+              httpd: []
+          files:
+            '/root/php.sh':
+              content: |
+                #!/bin/bash -ex
+                sed -i 's/max_execution_time = 30/max_execution_time = 300/' /etc/php.ini
+                sed -i 's/max_input_time = 60/max_input_time = 300/' /etc/php.ini
+                sed -i 's/; max_input_vars = 1000/max_input_vars = 10000/' /etc/php.ini
+                sed -i 's/memory_limit = 128M/memory_limit = 512M/' /etc/php.ini
+                sed -i 's/post_max_size = 8M/post_max_size = 200M/' /etc/php.ini
+                sed -i 's/upload_max_filesize = 2M/upload_max_filesize = 200M/' /etc/php.ini
+                sed -i 's/max_file_uploads = 20/max_file_uploads = 200/' /etc/php.ini
+                sed -i 's/opcache.memory_consumption=128/opcache.memory_consumption=256/g' /etc/php.d/10-opcache.ini
+                sed -i 's/opcache.interned_strings_buffer=8/opcache.interned_strings_buffer=16/g' /etc/php.d/10-opcache.ini
+                sed -i 's/opcache.max_accelerated_files=4000/opcache.max_accelerated_files=10000/g' /etc/php.d/10-opcache.ini
+                sed -i 's/;opcache.max_wasted_percentage=5/opcache.max_wasted_percentage=10/g' /etc/php.d/10-opcache.ini
+                sed -i 's/;opcache.validate_timestamps=1/opcache.validate_timestamps=1/g' /etc/php.d/10-opcache.ini
+                sed -i 's/;opcache.revalidate_freq=2/opcache.revalidate_freq=60/g' /etc/php.d/10-opcache.ini
+                sed -i 's/;opcache.fast_shutdown=0/opcache.fast_shutdown=0/g' /etc/php.d/10-opcache.ini
+              mode: '000500'
+              owner: root
+              group: root
+            '/etc/httpd/conf.d/lampstack.conf':
+              content: |
+                <Directory "/var/www/html">
+                Options Indexes FollowSymLinks
+                AllowOverride All
+                Require all granted
+                </Directory>
+              mode: '000500'
+              owner: root
+              group: root       
+          commands:
+            01_php:
+              command: '/root/php.sh'
+              cwd: '/var/www/html'
+            services:
+            sysvinit:
+              httpd:
+                enabled: true
+                ensureRunning: true
+      Properties:
+         IamInstanceProfile: !Ref WebServerInstanceProfile
+         ImageId: 
+           Fn::FindInMap:
+            - RegionMap 
+            - !Ref 'AWS::Region'
+            - AMI
+      InstanceType: t2.small
+      SecurityGroups:
+      - !Ref WebServerSecurityGroup
+      KeyName: SSHKeyName
+      UserData:
+        'Fn::Base64': !Sub |
+          #!/bin/bash -ex
+          trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource PlatoWebServerAutoScalingGroup --region ${AWS::Region}' ERR
+          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource PlatoWebServerLauchConfiguration --region ${AWS::Region}
+          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource PlatoWebServerAutoScalingGroup --region ${AWS::Region}
+  PlatoWebServerAutoScalingGroup:
+    Type: 'AWS::AutoScaling::AutoScalingGroup'
+    Properties:
+      TargetGroupARNs:
+      - !Ref PlatoLoadBalancerTargetGroup
+      LaunchConfigurationName: !Ref PlatoWebServerLauchConfiguration
+      MinSize: '2'
+      MaxSize: '4'
+      Cooldown: '60'
+      HealthCheckGracePeriod: 300
+      HealthCheckType: ELB
+      VPCZoneIdentifier: 
+          Fn::Split: 
+            - ',' 
+            - 'Fn::ImportValue': !Sub '${NetworkVPCStack}-SubnetsPrivate'
+      Tags:
+      - PropagateAtLaunch: true
+        Value: lamp-stack
+        Key: Name     
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT10M
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        PauseTime: PT10M
+        SuspendProcesses:
+        - HealthCheck
+        - ReplaceUnhealthy
+        - AZRebalance
+        - AlarmNotification
+        - ScheduledActions
+        WaitOnResourceSignals: true
