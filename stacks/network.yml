@@ -35,7 +35,7 @@ Resources:
              Ref: PlatoVPC
           Tags:
             - Key: Name
-              Value: PlatoExternalSubNetA
+              Value: PlatoPrivateSubNetA
     PlatoPublicSubNetA:
         Type: AWS::EC2::Subnet
         Properties:
@@ -49,7 +49,17 @@ Resources:
              Ref: PlatoVPC
           Tags:
             - Key: Name
-              Value: PlatoExternalSubNetA
+              Value: PlatoPublicSubNetA
+    PlatoEIPA:
+       Type: 'AWS::EC2::EIP'
+       Properties:
+          Domain: vpc
+    PlatoNatGatewayA:
+       Type: 'AWS::EC2::NatGateway'
+       Properties:
+          AllocationId: !GetAtt PlatoEIPA.AllocationId
+          SubnetId: 
+            Ref: PlatoPublicSubNetA
     PlatoPrivateSubNetB:
         Type: AWS::EC2::Subnet
         Properties:
@@ -62,7 +72,7 @@ Resources:
              Ref: PlatoVPC
           Tags:
             - Key: Name
-              Value: PlatoExternalSubNetB
+              Value: PlatoPrivateSubNetB
     PlatoPublicSubNetB:
         Type: AWS::EC2::Subnet
         Properties:
@@ -76,7 +86,17 @@ Resources:
              Ref: PlatoVPC
           Tags:
             - Key: Name
-              Value: PlatoExternalSubNetB
+              Value: PlatoPublicSubNetB
+    PlatoEIPB:
+       Type: 'AWS::EC2::EIP'
+       Properties:
+          Domain: vpc
+    PlatoNatGatewayB:
+       Type: 'AWS::EC2::NatGateway'
+       Properties:
+          AllocationId: !GetAtt PlatoEIPB.AllocationId
+          SubnetId: 
+            Ref: PlatoPublicSubNetB
     PlatoRouteTablePrivateA:
         Type: AWS::EC2::RouteTable
         Properties: 
@@ -137,6 +157,14 @@ Resources:
             Ref: PlatoPublicSubNetB
           RouteTableId:
             Ref: PlatoRouteTablePublicB
+    PlatoRouteTablePrivateNatGwRouteA:
+        Type: 'AWS::EC2::Route'
+        Properties:
+          RouteTableId: 
+              Ref: PlatoRouteTablePrivateA
+          DestinationCidrBlock: '0.0.0.0/0'
+          NatGatewayId: 
+              Ref: PlatoNatGatewayA     
     PlatoRouteTablePublicInternetRouteA:
         Type: 'AWS::EC2::Route'
         DependsOn: PlatoVPCGatewayAttachment
@@ -145,7 +173,15 @@ Resources:
               Ref: PlatoRouteTablePublicA
           DestinationCidrBlock: '0.0.0.0/0'
           GatewayId: 
-              Ref: PlatoInternetGw     
+              Ref: PlatoInternetGw 
+    PlatoRouteTablePrivateNatGwRouteB:
+        Type: 'AWS::EC2::Route'
+        Properties:
+          RouteTableId: 
+              Ref: PlatoRouteTablePrivateB
+          DestinationCidrBlock: '0.0.0.0/0'
+          NatGatewayId: 
+              Ref: PlatoNatGatewayB
     PlatoRouteTablePublicInternetRouteB:
         Type: 'AWS::EC2::Route'
         DependsOn: PlatoVPCGatewayAttachment
@@ -155,5 +191,86 @@ Resources:
           DestinationCidrBlock: '0.0.0.0/0'
           GatewayId: 
               Ref: PlatoInternetGw             
-    
+    PlatoNetworkAclPrivate:
+        Type: 'AWS::EC2::NetworkAcl'
+        Properties:
+          VpcId: 
+            Ref: PlatoVPC
+          Tags:
+          - Key: Name
+            Value: PlatoNetworkAclPrivate
+    PlatoNetworkAclPublic:
+        Type: 'AWS::EC2::NetworkAcl'
+        Properties:
+          VpcId: 
+            Ref: PlatoVPC
+          Tags:
+          - Key: Name
+            Value: PlatoNetworkAclPublic
+    PlatoSubnetNetworkAclAssociationPrivateA:
+        Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+        Properties:
+          SubnetId: 
+            Ref: PlatoPrivateSubNetA
+          NetworkAclId: 
+            Ref: PlatoNetworkAclPrivate
+    PlatoSubnetNetworkAclAssociationPublicA:
+        Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+        Properties:
+          SubnetId: 
+            Ref: PlatoPublicSubNetA
+          NetworkAclId: 
+            Ref: PlatoNetworkAclPublic
+    PlatoSubnetNetworkAclAssociationPrivateB:
+        Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+        Properties:
+          SubnetId: 
+            Ref: PlatoPrivateSubNetB
+          NetworkAclId: 
+            Ref: PlatoNetworkAclPrivate
+    PlatoSubnetNetworkAclAssociationPublicB:
+        Type: 'AWS::EC2::SubnetNetworkAclAssociation'
+        Properties:
+          SubnetId: 
+            Ref: PlatoPublicSubNetB
+          NetworkAclId: 
+            Ref: PlatoNetworkAclPublic
+    PlatoNetworkAclPrivateInAllowVPC:
+       Type: 'AWS::EC2::NetworkAclEntry'
+       Properties:
+          NetworkAclId: 
+            Ref: PlatoNetworkAclPrivate
+          CidrBlock: '0.0.0.0/0' 
+          RuleNumber: 99
+          Protocol: -1
+          RuleAction: allow
+    PlatoNetworkAclPrivateOutAllowVPC:
+       Type: 'AWS::EC2::NetworkAclEntry'
+       Properties:
+          NetworkAclId: 
+            Ref: PlatoNetworkAclPrivate
+          CidrBlock: '0.0.0.0/0' 
+          RuleNumber: 99
+          Protocol: -1
+          RuleAction: allow
+          Egress: true
+    PlatoNetworkAclPublicInAllowAll:
+       Type: 'AWS::EC2::NetworkAclEntry'
+       Properties:
+          NetworkAclId: 
+            Ref: PlatoNetworkAclPublic
+          CidrBlock: '0.0.0.0/0' 
+          RuleNumber: 99
+          Protocol: -1
+          RuleAction: allow
+    PlatoNetworkAclPublicOutAllowAll:
+       Type: 'AWS::EC2::NetworkAclEntry'
+       Properties:
+          NetworkAclId: 
+            Ref: PlatoNetworkAclPublic
+          CidrBlock: '0.0.0.0/0' 
+          RuleNumber: 99
+          Protocol: -1
+          RuleAction: allow
+          Egress: true
 
