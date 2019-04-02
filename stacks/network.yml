@@ -5,8 +5,8 @@ Resources:
         Type: AWS::EC2::VPC
         Properties:
             CidrBlock: 10.17.0.0/16
-            EnableDnsSupport: 'false'
-            EnableDnsHostnames: 'false'
+            EnableDnsSupport: true
+            EnableDnsHostnames: true
             Tags:
               - Key: Name
                 Value: PlatoVPC
@@ -316,3 +316,8 @@ Outputs:
           - !Ref PlatoPrivateSubNetB
     Export:
       Name: !Sub '${AWS::StackName}-SubnetsPrivate'
+  CidrBlock:
+    Description: 'IP addresses for the VPC.'
+    Value: !GetAtt 'PlatoVPC.CidrBlock'
+    Export:
+      Name: !Sub '${AWS::StackName}-CidrBlock'
