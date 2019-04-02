@@ -9,10 +9,10 @@ Parameters:
     Type: String
   DatabasePassword: 
     Description: 'datatabase password'
-    Type: string
+    Type: String
   SSHKeyName:
     Description: 'key pair for web servers'
-    Type: string
+    Type: String
 Mappings:
   RegionMap:
     'ap-south-1':
@@ -64,12 +64,12 @@ Resources:
     Properties:
       LoadBalancerAttributes:
       - Key: 'idle_timeout.timeout_seconds'
-        Value: !Ref LoadBalancerIdleTimeout
+        Value: 60
       - Key: 'routing.http2.enabled'
         Value: 'true'
       Subnets:
       - {'Fn::ImportValue': !Sub '${NetworkVPCStack}-SubnetPublicA'}
-      - {'Fn::ImportValue': !Sub '${NetworkVPCStack}-SubnetPublicA'}
+      - {'Fn::ImportValue': !Sub '${NetworkVPCStack}-SubnetPublicB'}
       SecurityGroups:
       - !Ref PlatoLoadBalancerSecurityGroup
       Scheme: 'internet-facing'
@@ -103,17 +103,17 @@ Resources:
   PlatoDatabaseSecurityGroup:
       Type: 'AWS::EC2::SecurityGroup'
       Properties:
-      GroupDescription: 'rds-lampstack'
-      VpcId: {'Fn::ImportValue': !Sub '${NetworkVPCStack}-VPC'}
-      SecurityGroupIngress:
-      - IpProtocol: tcp
-        FromPort: 3306
-        ToPort: 3306
-        SourceSecurityGroupId: !Ref PlatoWebServerSecurityGroup
-      - IpProtocol: tcp
-        FromPort: 3306
-        ToPort: 3306
-        SourceSecurityGroupId: {'Fn::ImportValue': !Sub '${BastionHostStack}-SecurityGroup'}
+        GroupDescription: 'rds-lampstack'
+        VpcId: {'Fn::ImportValue': !Sub '${NetworkVPCStack}-VPC'}
+        SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref PlatoWebServerSecurityGroup
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: {'Fn::ImportValue': !Sub '${BastionHostStack}-SecurityGroup'}
   PlatoDatabaseSubnetGroup:
     Type: 'AWS::RDS::DBSubnetGroup'
     Properties:
@@ -183,7 +183,7 @@ Resources:
               - 'logs:DescribeLogStreams'
               - 'logs:CreateLogStream'
               - 'logs:PutLogEvents'
-              Resource: !GetAtt 'PlatoSSHLogs.Arn'
+              Resource: !GetAtt 'PlatoWebServerLogs.Arn'
   PlatoWebServerInstanceProfile:
       Type: 'AWS::IAM::InstanceProfile'
       Properties:
@@ -386,28 +386,28 @@ Resources:
             01_php:
               command: '/root/php.sh'
               cwd: '/var/www/html'
-            services:
+          services:
             sysvinit:
               httpd:
                 enabled: true
                 ensureRunning: true
       Properties:
-         IamInstanceProfile: !Ref WebServerInstanceProfile
-         ImageId: 
-           Fn::FindInMap:
-            - RegionMap 
-            - !Ref 'AWS::Region'
-            - AMI
-      InstanceType: t2.small
-      SecurityGroups:
-      - !Ref WebServerSecurityGroup
-      KeyName: SSHKeyName
-      UserData:
-        'Fn::Base64': !Sub |
-          #!/bin/bash -ex
-          trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource PlatoWebServerAutoScalingGroup --region ${AWS::Region}' ERR
-          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource PlatoWebServerLauchConfiguration --region ${AWS::Region}
-          /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource PlatoWebServerAutoScalingGroup --region ${AWS::Region}
+        IamInstanceProfile: !Ref PlatoWebServerInstanceProfile
+        ImageId: 
+          Fn::FindInMap:
+           - RegionMap 
+           - !Ref 'AWS::Region'
+           - AMI
+        InstanceType: t2.small
+        SecurityGroups:
+         - !Ref PlatoWebServerSecurityGroup
+        KeyName: SSHKeyName
+        UserData:
+          'Fn::Base64': !Sub |
+            #!/bin/bash -ex
+            trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource PlatoWebServerAutoScalingGroup --region ${AWS::Region}' ERR
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource PlatoWebServerLauchConfiguration --region ${AWS::Region}
+            /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource PlatoWebServerAutoScalingGroup --region ${AWS::Region}
   PlatoWebServerAutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
     Properties:
