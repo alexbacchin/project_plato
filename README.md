@@ -15,7 +15,7 @@ The solution was split in 3 separate CloudFormation templates
 
 The environment was created to be high available, secure and cost effective.
 
-![Architecture](https://github.com/alexbacchin/project_plato/raw/master/img/2az.jpg)
+![Architecture](https://github.com/alexbacchin/project_plato/raw/master/img/2az.png)
 
 * **Highly Available** - it can atomatically recovers from server failure to whole AWS Availability Zone failure. 
 The approach is to deploy the stack accross 2 AWS avaiability zones, 4 subnets (public and private). Application load balancer to manage application traffic. 
