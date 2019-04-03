@@ -390,3 +390,10 @@ Resources:
         - AlarmNotification
         - ScheduledActions
         WaitOnResourceSignals: true
+Outputs:
+  StackName:
+    Description: 'Stack name.'
+    Value: !Sub '${AWS::StackName}'
+  LoadBalancerURL:
+    Description: 'The URL to access the lamp stack app'
+    Value: !GetAtt PlatoLoadBalancer.DNSName
