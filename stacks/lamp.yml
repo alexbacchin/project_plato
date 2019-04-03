@@ -48,7 +48,6 @@ Mappings:
     'us-west-2':
       AMI: 'ami-032509850cf9ee54e'
 Resources:
-
   PlatoLoadBalancerSecurityGroup:
       Type: 'AWS::EC2::SecurityGroup'
       Properties:
@@ -145,11 +144,9 @@ Resources:
         SecurityGroupIngress:
         - FromPort: 80
           IpProtocol: tcp
-          SourceSecurityGroupId: !Ref PlatoLoadBalancerSecurityGroup
+          SourceSecurityGroupId: !Ref PlatoLoadBalancerSecurityGroup 
           ToPort: 80
-        - FromPort: 22
-          ToPort: 22
-          IpProtocol: tcp
+        - IpProtocol: -1
           SourceSecurityGroupId: {'Fn::ImportValue': !Sub '${BastionHostStack}-SecurityGroup'}
   PlatoIAMRoleWebServer:
       Type: 'AWS::IAM::Role'
@@ -195,7 +192,7 @@ Resources:
       Metadata:
        'AWS::CloudFormation::Init':
         configSets:
-          default: [awslogs, extras, config]
+          default: [awslogs]
         awslogs:
           packages:
             yum:
@@ -302,16 +299,6 @@ Resources:
               mode: '000644'
               owner: root
               group: root
-            '/etc/awslogs/config/efs.conf':
-              content: !Sub |
-                [/var/log/amazon/efs/mount.log]
-                datetime_format = %Y-%m-%d %H:%M:%S
-                file = /var/log/amazon/efs/mount.log
-                log_stream_name = {instance_id}/var/log/amazon/efs/mount.log
-                log_group_name = ${PlatoWebServerLogs}
-              mode: '000644'
-              owner: root
-              group: root
             '/etc/awslogs/config/httpd.conf':
               content: !Sub |
                 [/var/log/httpd/access_log]
@@ -340,57 +327,6 @@ Resources:
                 - '/etc/awslogs/awscli.conf'
                 - '/etc/awslogs/config/efs.conf'
                 - '/etc/awslogs/config/httpd.conf'
-        config:
-          packages:
-            yum:
-              php: []
-              php-gd: []
-              php-opcache: []
-              php-mysqlnd: []
-              php-mbstring: []
-              php-xmlrpc: []
-              mariadb: []
-              httpd: []
-          files:
-            '/root/php.sh':
-              content: |
-                #!/bin/bash -ex
-                sed -i 's/max_execution_time = 30/max_execution_time = 300/' /etc/php.ini
-                sed -i 's/max_input_time = 60/max_input_time = 300/' /etc/php.ini
-                sed -i 's/; max_input_vars = 1000/max_input_vars = 10000/' /etc/php.ini
-                sed -i 's/memory_limit = 128M/memory_limit = 512M/' /etc/php.ini
-                sed -i 's/post_max_size = 8M/post_max_size = 200M/' /etc/php.ini
-                sed -i 's/upload_max_filesize = 2M/upload_max_filesize = 200M/' /etc/php.ini
-                sed -i 's/max_file_uploads = 20/max_file_uploads = 200/' /etc/php.ini
-                sed -i 's/opcache.memory_consumption=128/opcache.memory_consumption=256/g' /etc/php.d/10-opcache.ini
-                sed -i 's/opcache.interned_strings_buffer=8/opcache.interned_strings_buffer=16/g' /etc/php.d/10-opcache.ini
-                sed -i 's/opcache.max_accelerated_files=4000/opcache.max_accelerated_files=10000/g' /etc/php.d/10-opcache.ini
-                sed -i 's/;opcache.max_wasted_percentage=5/opcache.max_wasted_percentage=10/g' /etc/php.d/10-opcache.ini
-                sed -i 's/;opcache.validate_timestamps=1/opcache.validate_timestamps=1/g' /etc/php.d/10-opcache.ini
-                sed -i 's/;opcache.revalidate_freq=2/opcache.revalidate_freq=60/g' /etc/php.d/10-opcache.ini
-                sed -i 's/;opcache.fast_shutdown=0/opcache.fast_shutdown=0/g' /etc/php.d/10-opcache.ini
-              mode: '000500'
-              owner: root
-              group: root
-            '/etc/httpd/conf.d/lampstack.conf':
-              content: |
-                <Directory "/var/www/html">
-                Options Indexes FollowSymLinks
-                AllowOverride All
-                Require all granted
-                </Directory>
-              mode: '000500'
-              owner: root
-              group: root       
-          commands:
-            01_php:
-              command: '/root/php.sh'
-              cwd: '/var/www/html'
-          services:
-            sysvinit:
-              httpd:
-                enabled: true
-                ensureRunning: true
       Properties:
         IamInstanceProfile: !Ref PlatoWebServerInstanceProfile
         ImageId: 
@@ -401,12 +337,23 @@ Resources:
         InstanceType: t2.small
         SecurityGroups:
          - !Ref PlatoWebServerSecurityGroup
-        KeyName: SSHKeyName
+        KeyName: !Ref SSHKeyName
         UserData:
           'Fn::Base64': !Sub |
             #!/bin/bash -ex
             trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource PlatoWebServerAutoScalingGroup --region ${AWS::Region}' ERR
             /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource PlatoWebServerLauchConfiguration --region ${AWS::Region}
+            yum update -y
+            amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+            systemctl start httpd
+            systemctl enable httpd
+            usermod -a -G apache ec2-user
+            chown -R ec2-user:apache /var/www
+            chmod 2775 /var/www
+            find /var/www -type d -exec chmod 2775 {} \;
+            find /var/www -type f -exec chmod 0664 {} \;
+            echo "<h1>Hello World</h1>" > /var/www/html/index.html
+            echo "<?php phpinfo(); ?>" > /var/www/html/phpinfo.php
             /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource PlatoWebServerAutoScalingGroup --region ${AWS::Region}
   PlatoWebServerAutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
