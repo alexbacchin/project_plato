@@ -21,7 +21,8 @@ The environment was created to be high available, secure and cost effective.
 The approach is to deploy the stack accross 2 AWS avaiability zones, 4 subnets (public and private). Application load balancer to manage application traffic. 
 Finally AWS EC2 instance will be deployed from instace profile and auto scaling group, supporting failures and horizontal scallability  
 
-* **Security** - Bastion host is the only point available to interact with the backend. As well as, separation of network traffic between public and priviate, with subnets and NAT gateways. Network ACLs and security groups will allow only the expected traffic to flow among the resources.
+* **Security** - Bastion host is the only point available to interact with the backend. It is deployed one of the public subnets. 
+Also, separation of network traffic between public and priviate, with subnets and NAT gateways. Network ACLs and security groups will allow only the expected traffic to flow among the resources.
 
 * **Cost control** - On demand scalability:the application will scale horizontally b. MySQL is hosted on AWS RDS serverless, which will also scale on demand 
 
