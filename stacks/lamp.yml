@@ -194,7 +194,7 @@ Resources:
       Metadata:
        'AWS::CloudFormation::Init':
         configSets:
-          default: [awslogs]
+          default: [awslogs,app]
         awslogs:
           packages:
             yum:
@@ -329,6 +329,35 @@ Resources:
                 - '/etc/awslogs/awscli.conf'
                 - '/etc/awslogs/config/efs.conf'
                 - '/etc/awslogs/config/httpd.conf'
+        app:
+          files:
+             '/tmp/pdo.zip':
+                source: 'https://s3-ap-southeast-2.amazonaws.com/lampstack-demoapp/pdo.zip'
+             '/tmp/config.php':
+                content: !Sub 
+                - |
+                  <?php
+                  $host       = "${DBHost}";
+                  $username   = "lampstackdb";
+                  $password   = "${DatabasePassword}";
+                  $dbname     = "lampstackdb";
+                  $dsn        = "mysql:host=$host;dbname=$dbname";
+                  $options    = array(
+                                  PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+                              );  
+                - DBHost: !GetAtt 'PlatoDatabaseCluster.Endpoint.Address'
+                  DatabasePassword: !Ref DatabasePassword
+                mode: '000550'
+          commands:
+             unzipapp0:
+                command: "unzip pdo.zip -d /var/www/html"
+                cwd: "/tmp"
+             copyconfig1:
+                command: "cp -y config.php /var/www/html"
+                cwd: "/tmp"
+             setupapp1:
+                command: "chown -R ec2-user:apache /var/www"
+                cwd: "/tmp"
       Properties:
         IamInstanceProfile: !Ref PlatoWebServerInstanceProfile
         ImageId: 
@@ -356,7 +385,7 @@ Resources:
             echo "<h1>Hello World</h1>" > /var/www/html/index.html
             echo "<?php phpinfo(); ?>" > /var/www/html/phpinfo.php
             trap '/opt/aws/bin/cfn-signal -e 1 --stack ${AWS::StackName} --resource PlatoWebServerAutoScalingGroup --region ${AWS::Region}' ERR
-            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource PlatoWebServerLauchConfiguration --region ${AWS::Region}
+            /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource PlatoWebServerLauchConfiguration --region ${AWS::Region} 
             /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource PlatoWebServerAutoScalingGroup --region ${AWS::Region}
   PlatoWebServerAutoScalingGroup:
     Type: 'AWS::AutoScaling::AutoScalingGroup'
