@@ -393,7 +393,7 @@ Resources:
       TargetGroupARNs:
       - !Ref PlatoLoadBalancerTargetGroup
       LaunchConfigurationName: !Ref PlatoWebServerLauchConfiguration
-      MinSize: '1'
+      MinSize: '2'
       MaxSize: '4'
       Cooldown: '60'
       HealthCheckGracePeriod: 300
