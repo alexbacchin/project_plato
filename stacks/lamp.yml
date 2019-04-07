@@ -194,7 +194,7 @@ Resources:
       Metadata:
        'AWS::CloudFormation::Init':
         configSets:
-          default: [awslogs,app]
+          default: [awslogs, app]
         awslogs:
           packages:
             yum:
@@ -336,24 +336,24 @@ Resources:
              '/tmp/config.php':
                 content: !Sub 
                 - |
-                  <?php
-                  $host       = "${DBHost}";
-                  $username   = "lampstackdb";
-                  $password   = "${DatabasePassword}";
-                  $dbname     = "lampstackdb";
-                  $dsn        = "mysql:host=$host;dbname=$dbname";
-                  $options    = array(
-                                  PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
-                              );  
+                   <?php
+                    $host       = "${DBHost}";
+                    $username   = "lampstackdb";
+                    $password   = "${DatabasePassword}";
+                    $dbname     = "lampstackdb";
+                    $dsn        = "mysql:host=$host;dbname=$dbname";
+                    $options    = array(
+                                    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+                                );  
                 - DBHost: !GetAtt 'PlatoDatabaseCluster.Endpoint.Address'
                   DatabasePassword: !Ref DatabasePassword
-                mode: '000550'
+                mode: '00550'
           commands:
              unzipapp0:
                 command: "unzip pdo.zip -d /var/www/html"
                 cwd: "/tmp"
              copyconfig1:
-                command: "cp -y config.php /var/www/html"
+                command: "cp -f config.php /var/www/html"
                 cwd: "/tmp"
              setupapp1:
                 command: "chown -R ec2-user:apache /var/www"
@@ -393,7 +393,7 @@ Resources:
       TargetGroupARNs:
       - !Ref PlatoLoadBalancerTargetGroup
       LaunchConfigurationName: !Ref PlatoWebServerLauchConfiguration
-      MinSize: '2'
+      MinSize: '1'
       MaxSize: '4'
       Cooldown: '60'
       HealthCheckGracePeriod: 300
