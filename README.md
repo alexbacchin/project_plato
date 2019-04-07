@@ -36,3 +36,10 @@ These are alternatives that can be done on this stack.
 * **Restrict outbound traffic** - enhance security groups and NACLs to control the outgoing traffic.
 
  
+ 
+## Sample App
+
+To access the sample app please:
+
+1. Browse the {AppLoadBalanceUrl}/install.php - to create a table on the database
+2. Browse {AppLoadBalanceUrl}/public to access the app.
